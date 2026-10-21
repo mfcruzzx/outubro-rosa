@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Missão Rosa — Uma Jornada pela Vida</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6ecff;--ink:#4a1d4f;--head:#c2185b;--pink:#ff4f9a;--lilac:#b794f6;--card:#fff;--soft:#ffe9f4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#2a1536;--ink:#ffe9f4;--head:#ff8fc0;--card:#3b2049;--soft:#4d2a5e}}
+:root[data-theme="dark"]{--bg:#2a1536;--ink:#ffe9f4;--head:#ff8fc0;--card:#3b2049;--soft:#4d2a5e}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:Fredoka,"Trebuchet MS",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px}
+#hud{width:min(100%,800px);display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:clamp(13px,3.2vw,18px)}
+#bar{width:min(100%,800px);height:10px;border-radius:9px;background:var(--soft);overflow:hidden}
+#fill{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--lilac),var(--pink))}
+#stage{position:relative;width:min(100%,800px)}
+canvas{width:100%;height:auto;display:block;border-radius:18px;border:4px solid var(--pink);image-rendering:pixelated;touch-action:none}
+#ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:10px;background:rgba(74,29,79,.55);border-radius:18px}
+#ov[hidden]{display:none}
+.card{background:var(--card);border-radius:20px;padding:clamp(12px,3vw,24px);max-width:560px;max-height:100%;overflow:auto;text-align:center;font-size:clamp(13px,2.8vw,17px);line-height:1.4}
+h1,h2{margin:0 0 6px;color:var(--head);font-size:clamp(20px,5.5vw,38px);line-height:1.1}
+h2{font-size:clamp(17px,4vw,26px)}
+p{margin:6px 0}
+button{font:inherit;font-weight:700;cursor:pointer;border:0;border-radius:999px;padding:10px 22px;background:var(--pink);color:#fff;margin-top:8px}
+button:focus-visible{outline:3px solid var(--lilac);outline-offset:2px}
+.opt{display:block;width:100%;border-radius:14px;background:var(--soft);color:var(--ink);border:2px solid var(--lilac);text-align:left;padding:9px 14px}
+.opt.ok{background:#c8f7d6;border-color:#2ea35a;color:#14532d}
+.opt.no{background:#ffd1d1;border-color:#d33;color:#7f1d1d}
+#tc{display:none;width:min(100%,800px);justify-content:space-between;gap:10px}
+#tc button{flex:1;margin:0;padding:16px 0;font-size:22px;user-select:none;touch-action:none}
+#tc .j{flex:2;background:var(--lilac)}
+@media (pointer:coarse){#tc{display:flex}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style></head>
+<body>
+<div id="hud"><span id="fase"></span><span id="vid"></span><span id="pts"></span></div>
+<div id="bar"><i id="fill"></i></div>
+<div id="stage"><canvas id="c" width="800" height="450"></canvas><div id="ov"></div></div>
+<div id="tc"><button id="bl" aria-label="Esquerda">◀</button><button id="br" aria-label="Direita">▶</button><button id="bj" class="j">Pular</button></div>
+<script>
+const $=i=>document.getElementById(i),C=$('c'),X=C.getContext('2d'),W=800,H=450,G=380;
+const NAMES=['Caminho da Conscientização','Jornada do Conhecimento','Missão pela Vida'];
+const DESC=['Colete os laços rosa e chegue à bandeira. Fácil e tranquila!','Mais espinhos pelo caminho, alguns se mexem. Fique atenta!','A fase final: mais laços e uma mensagem especial no fim.'];
+const Q=[
+[{q:'Qual mês é dedicado à campanha de conscientização sobre o câncer de mama?',o:['Março','Outubro','Dezembro'],a:1,e:'O Outubro Rosa lembra a importância da prevenção e do diagnóstico precoce.'}],
+[{q:'Qual destes é um sinal de alerta que deve ser avaliado por um profissional de saúde?',o:['Nódulo na mama ou na axila','Cansaço depois de correr','Dor de cabeça leve'],a:0,e:'Nódulos, mudanças na pele ou no mamilo e secreção merecem avaliação médica.'},
+ {q:'Qual exame de imagem é o principal para rastrear o câncer de mama?',o:['Mamografia','Raio-X do tórax','Eletrocardiograma'],a:0,e:'A mamografia pode detectar alterações antes dos sintomas. Converse com seu médico sobre quando começar.'}],
+[{q:'Por que a detecção precoce é tão importante?',o:['Porque dispensa o tratamento','Porque aumenta muito as chances de cura','Porque só vale para pessoas idosas'],a:1,e:'Quanto mais cedo o diagnóstico, maiores as chances de cura e mais leve costuma ser o tratamento.'},
+ {q:'Homens também podem ter câncer de mama?',o:['Não, é impossível','Só depois dos 90 anos','Sim, embora seja bem mais raro'],a:2,e:'É raro, mas acontece. Qualquer alteração na mama deve ser avaliada.'}]];
+let lv=0,score=0,base=0,hearts=3,st='menu',L,p,parts=[],T=0,cam=0,qi=0,jb=0,done=0;
+const keys={l:0,r:0};
+function rng(s){return()=>(s=(s*16807)%2147483647)/2147483647}
+function build(n){const r=rng(n*97+13),d=[.2,.3,.38][n],len=[2600,3400,4200][n],o={len,pl:[],rb:[],ob:[],qs:Q[n]};let x=420;
+ while(x<len-320){const t=r();
+  if(t<.4){const y=r()<.5?300:268,w=120+(r()*50|0);o.pl.push({x,y,w});for(let i=0;i<3;i++)o.rb.push({x:x+25+i*(w-50)/2,y:y-28});x+=w+150}
+  else if(t<.4+d){o.ob.push({x0:x,x,w:36,m:n>0&&r()<.5});o.rb.push({x:x+18,y:G-110});x+=210}
+  else{for(let i=0;i<3;i++)o.rb.push({x:x+i*42,y:G-30});x+=200}}
+ return o}
+function reset(n){lv=n;L=build(n);p={x:60,y:G-39,w:24,h:39,vx:0,vy:0,g:true,f:1,inv:0,wt:0};hearts=3;base=score;cam=0;parts=[];done=0}
+let AC;function snd(f){try{AC=AC||new AudioContext();const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.type='square';g.gain.value=.04;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.stop(AC.currentTime+.12)}catch(e){}}
+function burst(x,y){for(let i=0;i<10;i++)parts.push({x,y,vx:(Math.random()-.5)*5,vy:-Math.random()*4,l:30})}
+function ov(h){$('ov').innerHTML='<div class="card">'+h+'</div>';$('ov').hidden=false}
+function hide(){$('ov').hidden=true}
+function intro(n){reset(n);st='menu';ov('<h2>Fase '+(n+1)+' — '+NAMES[n]+'</h2><p>'+DESC[n]+'</p><button onclick="go()">Jogar</button>')}
+function go(){st='play';hide()}
+function menu(){score=0;reset(0);st='menu';ov('<h1>Missão Rosa</h1><h2>Uma Jornada pela Vida</h2><p>Colete laços rosa, desvie dos espinhos e responda às perguntas do Outubro Rosa. Cada laço vale 10 pontos.</p><p><b>A / D</b> ou setas para andar · <b>Espaço</b> para pular</p><p><small>Criado pelo grupo <b>Mauricio, Camilli e Isa Egli</b></small></p><button onclick="intro(0)">Começar</button>')}
+function over(){st='over';ov('<h2>Ai, os espinhos!</h2><p>Sem problemas, tente de novo. Seus laços desta fase voltam para o caminho.</p><button onclick="retry()">Tentar de novo</button>')}
+function retry(){score=base;reset(lv);go()}
+function showQ(res){const q=L.qs[qi];let h='<h2>Pergunta '+(qi+1)+' de '+L.qs.length+'</h2><p><b>'+q.q+'</b></p>';
+ q.o.forEach((t,i)=>{let c='opt';if(res!=null){if(i===q.a)c+=' ok';else if(i===res)c+=' no'}h+='<button class="'+c+'" '+(res!=null?'disabled':'onclick="ans('+i+')"')+'>'+t+'</button>'});
+ if(res!=null){const last=qi>=L.qs.length-1;h+='<p>'+(res===q.a?'<b>Acertou! +50 pontos.</b> ':'<b>Quase!</b> ')+q.e+'</p><button onclick="nextQ()">'+(!last?'Próxima pergunta':lv<2?'Próxima fase':'Ver mensagem final')+'</button>'}
+ ov(h)}
+function ans(i){if(L.qs[qi].a===i){score+=50;snd(990)}else snd(200);showQ(i)}
+function nextQ(){qi++;if(qi<L.qs.length)showQ();else if(lv<2)intro(lv+1);else finish()}
+function finish(){st='end';ov('<h1>Você venceu! 🎀</h1><h2>Pontuação: '+score+'</h2><p>Cuidar de você é um ato de amor. Conheça o seu corpo, observe qualquer mudança nas mamas, consulte um profissional de saúde com regularidade e faça os exames recomendados para a sua idade. No Brasil, a mamografia está disponível pelo SUS.</p><p><b>Descobrir cedo salva vidas. Compartilhe esta mensagem!</b></p><p><small>Jogo criado pelo grupo <b>Mauricio, Camilli e Isa Egli</b></small></p><button onclick="menu()">Jogar de novo</button>')}
+function upd(k){T+=k;
+ const d=keys.r-keys.l;p.vx=d*4.4;if(d)p.f=d;p.wt+=Math.abs(d)*.25*k;
+ if(jb>0){jb-=k;if(p.g){p.vy=-13;p.g=false;jb=0;snd(520)}}
+ const pb=p.y+p.h;p.x=Math.max(0,p.x+p.vx*k);p.vy+=.62*k;p.y+=p.vy*k;p.g=false;
+ const b=p.y+p.h;
+ if(b>=G){p.y=G-p.h;p.vy=0;p.g=true}
+ else if(p.vy>=0)for(const q of L.pl)if(p.x+p.w>q.x&&p.x<q.x+q.w&&pb<=q.y+3&&b>=q.y){p.y=q.y-p.h;p.vy=0;p.g=true;break}
+ for(const c of L.rb)if(!c.c&&Math.abs(p.x+12-c.x)<26&&Math.abs(p.y+20-c.y)<32){c.c=1;score+=10;snd(880);burst(c.x,c.y)}
+ p.inv-=k;
+ for(const o of L.ob){o.x=o.m?o.x0+Math.sin(T/30+o.x0)*45:o.x0;
+  if(p.inv<=0&&p.x+p.w-5>o.x&&p.x+5<o.x+o.w&&p.y+p.h>G-26){hearts--;p.inv=90;p.vy=-8;p.x=Math.max(0,p.x-50);snd(160);if(hearts<=0){over();return}}}
+ parts.forEach(a=>{a.x+=a.vx*k;a.y+=a.vy*k;a.vy+=.2*k;a.l-=k});parts=parts.filter(a=>a.l>0);
+ if(p.x>L.len+30&&!done){done=1;st='quiz';qi=0;snd(700);showQ()}
+ cam=Math.max(0,Math.min(L.len+160-W,p.x-W*.35))}
+const sky=X.createLinearGradient(0,0,0,G);sky.addColorStop(0,'#e4d2ff');sky.addColorStop(1,'#ffd3e8');
+function hills(c,per,amp,y,sp){X.fillStyle=c;X.beginPath();X.moveTo(0,H);for(let x=0;x<=W;x+=20)X.lineTo(x,y-Math.abs(Math.sin((x+cam*sp)/per))*amp);X.lineTo(W,H);X.fill()}
+function rib(x,y,s){X.save();X.translate(x,y);X.scale(s,s);X.strokeStyle='#ff3d8b';X.fillStyle='#ff3d8b';X.lineWidth=3.2;X.lineCap='round';
+ X.beginPath();X.ellipse(-6,-5,7,4,-.6,0,7);X.stroke();X.beginPath();X.ellipse(6,-5,7,4,.6,0,7);X.stroke();
+ X.lineWidth=4;X.beginPath();X.moveTo(0,0);X.lineTo(-8,13);X.moveTo(0,0);X.lineTo(8,13);X.stroke();
+ X.fillStyle='#fff';X.beginPath();X.arc(0,-1,2.4,0,7);X.fill();X.restore()}
+function drawP(){if(p.inv>0&&Math.floor(T/4)%2)return;const u=3;X.save();X.translate(p.x+12,p.y);if(p.f<0)X.scale(-1,1);X.translate(-12,0);
+ const w=Math.sin(p.wt)>0;if(p.g&&p.vx)X.translate(0,-Math.abs(Math.sin(p.wt))*2);
+ const R=(c,x,y,a,b)=>{X.fillStyle=c;X.fillRect(x*u,y*u,a*u,b*u)},S='#ffd9bd',Hc='#6b3a2a';
+ R(Hc,1,1,6,3);R(Hc,0,3,1,5);R(Hc,7,3,1,5);R(S,2,3,4,3);R('#2b1a2f',3,4,1,1);R('#2b1a2f',5,4,1,1);R('#ff9fc3',2,5,1,1);R('#ff9fc3',5,5,1,1);R(S,3,5,2,1);
+ R('#ff3d8b',2,0,2,2);R('#ff3d8b',5,0,2,2);R('#fff',4,0,1,2);
+ R(S,0,7,1,2);R(S,7,7,1,2);R('#ff5fa2',1,6,6,4);R('#fff',3,6,2,1);R('#ff5fa2',0,9,8,1);
+ R(S,2,10,1,2);R(S,5,10,1,2);
+ if(p.g){R('#8e5fd8',1,w?11:12,2,1);R('#8e5fd8',5,w?12:11,2,1)}else{R('#8e5fd8',1,11,2,1);R('#8e5fd8',5,11,2,1)}
+ X.restore()}
+function draw(){X.fillStyle=sky;X.fillRect(0,0,W,H);
+ X.fillStyle='#fff4fa';X.beginPath();X.arc(650,90,42,0,7);X.fill();
+ X.fillStyle='rgba(255,255,255,.85)';for(let i=0;i<9;i++){const cx=((i*330-cam*.3)%2970+2970)%2970-170,cy=50+(i*53)%110;X.fillRect(cx,cy,90,22);X.fillRect(cx+16,cy-14,50,16);X.fillRect(cx+60,cy-6,40,12)}
+ hills('#d9c2f7',90,70,330,.2);hills('#ffb8d8',60,40,370,.5);
+ X.save();X.translate(-Math.floor(cam),0);
+ X.fillStyle='#ff9ec9';X.fillRect(cam-10,G,W+20,H-G);X.fillStyle='#ff6fb1';X.fillRect(cam-10,G,W+20,8);
+ for(let x=Math.floor(cam/48)*48;x<cam+W+48;x+=48){X.fillStyle=(x/48)%2?'#fff':'#e4d2ff';X.fillRect(x+10,G+26,6,6);X.fillRect(x+7,G+29,12,0.1);X.fillRect(x+30,G+48,6,6)}
+ for(const q of L.pl){X.fillStyle='#8e5fd8';X.fillRect(q.x,q.y+6,q.w,16);X.fillStyle='#b794f6';X.fillRect(q.x,q.y,q.w,12);X.fillStyle='#fff';X.fillRect(q.x,q.y,q.w,5)}
+ for(const c of L.rb)if(!c.c)rib(c.x,c.y+Math.sin(T/15+c.x)*4,1.15);
+ for(const o of L.ob){X.fillStyle='#7b4fb8';X.fillRect(o.x,G-14,o.w,14);X.beginPath();for(let i=0;i<4;i++){X.moveTo(o.x+i*9,G-10);X.lineTo(o.x+i*9+4.5,G-32);X.lineTo(o.x+i*9+9,G-10)}X.fill();
+  X.fillStyle='#fff';X.fillRect(o.x+8,G-11,6,6);X.fillRect(o.x+22,G-11,6,6);X.fillStyle='#2b1a2f';X.fillRect(o.x+11,G-9,3,3);X.fillRect(o.x+25,G-9,3,3)}
+ const gx=L.len+40;X.fillStyle='#fff';X.fillRect(gx,G-170,6,170);X.fillStyle='#b794f6';X.fillRect(gx-4,G-8,14,8);rib(gx+3,G-182+Math.sin(T/20)*3,3.2);
+ drawP();
+ for(const a of parts){X.fillStyle=a.l%6<3?'#fff':'#ff3d8b';X.fillRect(a.x,a.y,4,4)}
+ X.restore();
+ $('fase').textContent='Fase '+(lv+1)+' — '+NAMES[lv];$('vid').textContent='❤'.repeat(Math.max(hearts,0))+'♡'.repeat(3-Math.max(hearts,0));$('pts').textContent='🎀 '+score;$('fill').style.width=Math.min(100,p.x/L.len*100)+'%'}
+let last=0;function loop(t){const k=Math.min((t-last)/16.67,2.5)||1;last=t;if(st==='play')upd(k);draw();requestAnimationFrame(loop)}
+addEventListener('keydown',e=>{const k=e.key;
+ if(k==='ArrowLeft'||k==='a'||k==='A')keys.l=1;
+ if(k==='ArrowRight'||k==='d'||k==='D')keys.r=1;
+ if(k===' '||k==='ArrowUp'||k==='w'||k==='W'){if(!e.repeat&&st==='play')jb=8}
+ if(st==='play'&&(k===' '||k.startsWith('Arrow')))e.preventDefault()});
+addEventListener('keyup',e=>{const k=e.key;
+ if(k==='ArrowLeft'||k==='a'||k==='A')keys.l=0;
+ if(k==='ArrowRight'||k==='d'||k==='D')keys.r=0});
+[['bl','l'],['br','r']].forEach(([id,k])=>{const b=$(id);b.onpointerdown=e=>{e.preventDefault();keys[k]=1};b.onpointerup=b.onpointerleave=b.onpointercancel=()=>keys[k]=0});
+$('bj').onpointerdown=e=>{e.preventDefault();if(st==='play')jb=8};
+reset(0);menu();requestAnimationFrame(loop);
+</script></body></html>
